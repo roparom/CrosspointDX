@@ -153,7 +153,7 @@ STR_DIR_DOWN: "Down"
 STR_DIR_LEFT: "Left"
 STR_DIR_RIGHT: "Right"
 STR_DIR_UP: "Up"
-STR_DISCLAIMER: "For authorized testing only. You are responsible for compliance with local laws. Don't be a SKID! Continue?" #talking sasquatch would be proud ;)
+STR_DISCLAIMER: "For authorized testing only. You are responsible for compliance with local laws. Continue?"
 STR_DISPLAY_INVERT: "Invert Display"
 STR_DISPLAY_QR: "Show page as QR"
 STR_DNS_LOOKUP: "DNS Lookup"
