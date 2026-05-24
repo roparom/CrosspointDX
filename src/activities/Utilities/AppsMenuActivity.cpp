@@ -107,7 +107,9 @@ static constexpr RadarNode kRadarNodes[8] = {
   {"TOOLS",    32},
   {"GAMES",    11},
   {"MAIN MENU", 0},
-  {"SETTINGS",  7},
+  {"SYSTEM",  4}, //from settings, removed crosspoint settings access
+
+
 };
 
 void AppsMenuActivity::onEnter() {
@@ -259,36 +261,26 @@ void AppsMenuActivity::loop() {
                 {tr(STR_VORONOI), "Generate Voronoi patterns", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<VoronoiActivity>(r, m); }},
                 {"Matrix Rain", "The Matrix digital rain effect", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<MatrixRainActivity>(r, m); }},
             };
-            app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, tr(STR_GAMES), std::move(e), false, 5);
+            app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, "Entertainment", std::move(e), false, 5);
             break;
           }
           case 6: {
-                std::vector<AppCategoryActivity::AppEntry> e = {
-                {"Open Book", "Browse and open an ebook", UIIcon::Book, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<FileBrowserActivity>(r, m); }},
-                {"Recent Books", "Continue where you left off", UIIcon::Recent, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<RecentBooksActivity>(r, m); }},
-                {"OPDS Browser", "Download books from OPDS servers", UIIcon::Library, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<OpdsBookBrowserActivity>(r, m, OpdsServer{"", "", "", ""}); }},
-                {"Reading Stats", "Pages read, streaks, progress", UIIcon::Book, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<ReadingStatsActivity>(r, m); }},
-                {"Browse Files", "File manager for SD card", UIIcon::Folder, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<FileBrowserActivity>(r, m); }},
-            };
-            // Change the menu title from "Reader" to "Crosspoint" to better reflect its purpose
-            app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, "Crosspoint", std::move(e), false, 6);
-            break;
-          }
-          case 7: {
             std::vector<AppCategoryActivity::AppEntry> e = {
-                AppCategoryActivity::SectionHeader("PREFERENCES"),
-                {"Settings", "Display, reader, controls, system", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<SettingsActivity>(r, m); }},
-                AppCategoryActivity::SectionHeader("FILE TRANSFER"),
-                {"WiFi Transfer", "Upload/download via WiFi", UIIcon::Transfer, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<NetworkModeSelectionActivity>(r, m); }},
-                AppCategoryActivity::SectionHeader("SYSTEM"),
                 {"Task Manager", "View heap, uptime, activity stack", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<TaskManagerActivity>(r, m); }},
                 {"Battery", "Battery level + history graph", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BatteryMonitorActivity>(r, m); }},
                 {"Device Info", "Chip, flash, RAM, firmware info", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<DeviceInfoActivity>(r, m); }},
                 {"Background", "Radio state, SD, active timers", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BackgroundManagerActivity>(r, m); }},
             };
-            app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, "Settings", std::move(e), false, 7);
+            app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, "System", std::move(e), false, 5);
             break;
           }
+          case 7: {
+            // MAIN MENU — return to the CrossPoint home screen
+            onGoHome();
+            break;
+            
+          }
+        
         }
       if (app) activityManager.pushActivity(std::move(app));
     }
@@ -429,7 +421,7 @@ void AppsMenuActivity::loop() {
               {"Dead Drop", "Anonymous file exchange AP", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<DeadDropActivity>(r, m); }},
               {"Bulletin Board", "Local anonymous message board", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BulletinBoardActivity>(r, m); }},
           };
-          app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, "Comms", std::move(e), false, 3);
+          app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, "Communications", std::move(e), false, 3);
           break;
         }
         case 4: {
@@ -477,7 +469,7 @@ void AppsMenuActivity::loop() {
           break;
         }
         case 5: {
-          // GAMES
+          // ENTERTAINMENT
           std::vector<AppCategoryActivity::AppEntry> e = {
               {"Casino", "Slots, blackjack, roulette + lootbox", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<CasinoActivity>(r, m); }, false, []() -> bool { return Storage.exists("/biscuit/casino.dat"); }},
               {tr(STR_MINESWEEPER), "Classic minesweeper", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<MinesweeperActivity>(r, m); }},
@@ -491,30 +483,27 @@ void AppsMenuActivity::loop() {
               {tr(STR_VORONOI), "Generate Voronoi patterns", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<VoronoiActivity>(r, m); }},
               {"Matrix Rain", "The Matrix digital rain effect", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<MatrixRainActivity>(r, m); }},
           };
-          app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, tr(STR_GAMES), std::move(e), false, 5);
+          app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, "Entertainment", std::move(e), false, 5);
           break;
         }
         case 6: {
           // MAIN MENU — return to the CrossPoint home screen
           onGoHome();
-          break;
+          break; 
         }
         case 7: {
-          // SETTINGS — promoted to main tile
+          // SYSTEM — system info
           std::vector<AppCategoryActivity::AppEntry> e = {
-              AppCategoryActivity::SectionHeader("PREFERENCES"),
-              {"Settings", "Display, reader, controls, system", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<SettingsActivity>(r, m); }},
-              AppCategoryActivity::SectionHeader("FILE TRANSFER"),
-              {"WiFi Transfer", "Upload/download via WiFi", UIIcon::Transfer, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<NetworkModeSelectionActivity>(r, m); }},
-              AppCategoryActivity::SectionHeader("SYSTEM"),
               {"Task Manager", "View heap, uptime, activity stack", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<TaskManagerActivity>(r, m); }},
               {"Battery", "Battery level + history graph", UIIcon::File, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BatteryMonitorActivity>(r, m); }},
               {"Device Info", "Chip, flash, RAM, firmware info", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<DeviceInfoActivity>(r, m); }},
               {"Background", "Radio state, SD, active timers", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BackgroundManagerActivity>(r, m); }},
-          };
-          app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, "Settings", std::move(e), false, 7);
+            };
+          app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, "System", std::move(e), false, 3);
           break;
+                
         }
+
       }
     if (app) activityManager.pushActivity(std::move(app));
   }
@@ -551,14 +540,21 @@ void AppsMenuActivity::render(RenderLock&&) {
 
   // === STATUS INFO ROW (below separator, above tiles) ===
   constexpr int statusRowY = 42;
-  char statusBuf[64];
-  if (wifiConnected) {
-    snprintf(statusBuf, sizeof(statusBuf), "WiFi: on | %luK | %s",
+  char statusBuf[64]; {
+  
+    if (wifiConnected) {
+    snprintf(statusBuf, sizeof(statusBuf), "WiFi: ON | Heap: %luK | Uptime: %s",
              (unsigned long)(freeHeap / 1024), uptimeStr);
-  } else {
-    snprintf(statusBuf, sizeof(statusBuf), "WiFi: off | %luK | %s",
+    } else {
+    snprintf(statusBuf, sizeof(statusBuf), "WiFi: OFF | Heap: %luK | Uptime: %s",
              (unsigned long)(freeHeap / 1024), uptimeStr);
+    }
+
   }
+  //Remove wifi from status row since we have a dedicated indicator in the status bar, and to reduce clutter. The WiFi status is still shown as a dot in the top right corner, and the text status is redundant with that.
+  //  snprintf(statusBuf, sizeof(statusBuf), "Heap: %luK | Uptime: %s",
+  //           (unsigned long)(freeHeap / 1024), uptimeStr);
+  
   renderer.drawText(SMALL_FONT_ID, 14, statusRowY, statusBuf);
 
   // === TILE GRID ===
@@ -631,34 +627,36 @@ void AppsMenuActivity::drawStatusBar() const {
   constexpr int pad = 14;
 
    // Left: branding updated to Crosspoint DX
-   renderer.drawText(UI_12_FONT_ID, pad, 10, "Crosspoint DX", true, EpdFontFamily::BOLD);
+   renderer.drawText(UI_12_FONT_ID, pad, 10, "CrossPointDX", true, EpdFontFamily::BOLD);
 
   // Right side: build right-to-left to avoid overlap
 
   // Uptime (rightmost)
-  int uptimeW = renderer.getTextWidth(SMALL_FONT_ID, uptimeStr);
-  int rightX = pageWidth - pad;
-  renderer.drawText(SMALL_FONT_ID, rightX - uptimeW, 14, uptimeStr);
-  rightX -= uptimeW + 10;
+  //int uptimeW = renderer.getTextWidth(SMALL_FONT_ID, uptimeStr);
+  //int rightX = pageWidth - pad;
+  //renderer.drawText(SMALL_FONT_ID, rightX - uptimeW, 14, uptimeStr);
+  //rightX -= uptimeW + 10;
 
   // Heap
-  char heapStr[16];
-  snprintf(heapStr, sizeof(heapStr), "%luK", (unsigned long)(freeHeap / 1024));
-  int heapW = renderer.getTextWidth(SMALL_FONT_ID, heapStr);
-  renderer.drawText(SMALL_FONT_ID, rightX - heapW, 14, heapStr);
-  rightX -= heapW + 10;
-
-  // WiFi dot
-  if (wifiConnected) {
-    renderer.fillRect(rightX - 6, 16, 6, 6, true);
-  } else {
-    renderer.drawRect(rightX - 6, 16, 6, 6, true);
-  }
-  rightX -= 14;
+  //char heapStr[16];
+  //snprintf(heapStr, sizeof(heapStr), "%luK", (unsigned long)(freeHeap / 1024));
+  //int heapW = renderer.getTextWidth(SMALL_FONT_ID, heapStr);
+  //renderer.drawText(SMALL_FONT_ID, rightX - heapW, 14, heapStr);
+  //rightX -= heapW + 10;
 
   // Battery — drawBatteryRight draws percentage text at rect.y, icon at rect.y+6
+  int rightX = pageWidth - pad;
   GUI.drawBatteryRight(renderer, Rect{rightX - 16, 14, 15, 12});
 
+  // WiFi dot
+  //if (wifiConnected) {
+  //  renderer.fillRect(rightX - 6, 16, 6, 6, true);
+  //} else {
+  //  renderer.drawRect(rightX - 6, 16, 6, 6, true);
+  //}
+  //rightX -= 14;
+
+  
   // Separator line
   renderer.drawLine(pad, 38, pageWidth - pad, 38, true);
 }
@@ -679,14 +677,14 @@ void AppsMenuActivity::drawTile(int index, int x, int y, int w, int h, bool sele
   int appCount = 0;
 
   switch (index) {
-    case 0: name = "RECON";    subtitle = "Scan & monitor";     appCount = 14; break;
-    case 1: name = "OFFENSE";  subtitle = "Scan/profile/test";  appCount = 21; break;
-    case 2: name = "DEFENSE";  subtitle = "Ghost & protect";    appCount = 12; break;
-    case 3: name = "COMMS";    subtitle = "Chat & share";       appCount = 5;  break;
-    case 4: name = "TOOLS";    subtitle = "Utilities";          appCount = 32; break;
-    case 5: name = "GAMES";    subtitle = "Entertainment";      appCount = 11; break;
-    case 6: name = "MAIN MENU"; subtitle = "Return to home";   appCount = 0;  break;
-    case 7: name = "SETTINGS"; subtitle = "System & config";    appCount = 7;  break;
+    case 0: name = "Recon";    subtitle = "Scan & monitor";     appCount = 14; break;
+    case 1: name = "Offense";  subtitle = "Scan/profile/test";  appCount = 21; break;
+    case 2: name = "Defense";  subtitle = "Ghost & protect";    appCount = 12; break;
+    case 3: name = "Comms";    subtitle = "Chat & share";       appCount = 5;  break;
+    case 4: name = "Tools";    subtitle = "Utilities";          appCount = 32; break;
+    case 5: name = "Entertainment";    subtitle = "Games and More";      appCount = 11; break;
+    case 6: name = "CrossPoint"; subtitle = "Main Menu";   appCount = 0;  break;
+    case 7: name = "System"; subtitle = "System Info";    appCount = 4;  break;
   }
 
   renderer.drawText(UI_12_FONT_ID, x + pad, nameY, name, !selected, EpdFontFamily::BOLD);
