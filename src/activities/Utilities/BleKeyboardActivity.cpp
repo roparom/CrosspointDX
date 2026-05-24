@@ -165,7 +165,7 @@ void BleKeyboardActivity::startAdvertising() {
   pServer->setCallbacks(new ServerCallbacks(*this));
 
   pHid = new BLEHIDDevice(pServer);
-  pHid->manufacturer()->setValue("biscuit");
+  pHid->manufacturer()->setValue("BLE_X4KB"); //from "biscuit"
   pHid->pnp(0x02, 0x05AC, 0x820A, 0x0210);
   pHid->hidInfo(0x00, 0x01);
   pHid->reportMap(const_cast<uint8_t*>(HID_REPORT_DESCRIPTOR), sizeof(HID_REPORT_DESCRIPTOR));
