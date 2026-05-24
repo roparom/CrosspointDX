@@ -543,10 +543,10 @@ void AppsMenuActivity::render(RenderLock&&) {
   char statusBuf[64]; {
   
     if (wifiConnected) {
-    snprintf(statusBuf, sizeof(statusBuf), "WiFi: ON | Heap: %luK | Uptime: %s",
+    snprintf(statusBuf, sizeof(statusBuf), "WiFi: On | Heap: %luK | Uptime: %s",
              (unsigned long)(freeHeap / 1024), uptimeStr);
     } else {
-    snprintf(statusBuf, sizeof(statusBuf), "WiFi: OFF | Heap: %luK | Uptime: %s",
+    snprintf(statusBuf, sizeof(statusBuf), "WiFi: Off | Heap: %luK | Uptime: %s",
              (unsigned long)(freeHeap / 1024), uptimeStr);
     }
 

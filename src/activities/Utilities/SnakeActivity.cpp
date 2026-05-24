@@ -224,7 +224,7 @@ void SnakeActivity::renderPlaying() const {
   snprintf(scoreBuf, sizeof(scoreBuf), "Score: %d  Length: %d", score, (int)snake.size());
   renderer.drawText(UI_10_FONT_ID, metrics.contentSidePadding, scoreY, scoreBuf, true, EpdFontFamily::BOLD);
 
-  const auto labels = mappedInput.mapLabels(tr(STR_BACK), "", "", "");
+  const auto labels = mappedInput.mapLabels("", "", "", ""); //removed back label to avoid covering score
   GUI.drawButtonHints(renderer, labels.btn1, labels.btn2, labels.btn3, labels.btn4);
 }
 
