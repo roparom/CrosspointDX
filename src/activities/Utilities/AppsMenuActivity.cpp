@@ -366,6 +366,11 @@ void AppsMenuActivity::loop() {
     }
   }
 
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+    finish();
+    return;
+  }
+
   // === CONFIRM: open category ===
    // 'app' is declared at the start of the function (see above) and reused here.
    if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
@@ -514,7 +519,10 @@ void AppsMenuActivity::loop() {
     if (app) activityManager.pushActivity(std::move(app));
   }
 
-  // Back button ignored on main screen — use Power button to sleep
+  if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
+    finish();
+    return;
+  }
 }
 
 void AppsMenuActivity::render(RenderLock&&) {
