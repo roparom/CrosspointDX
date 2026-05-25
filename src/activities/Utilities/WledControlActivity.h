@@ -37,7 +37,7 @@ class WledControlActivity final : public Activity {
     bool powerOn = false;
     uint8_t brightness = 127;
     uint16_t effect = 0;
-    std::string colourName = "Off";
+    std::string colourName = "Black";
     unsigned long lastUpdate = 0;
   };
 
