@@ -12,6 +12,7 @@
 #include "DnsLookupActivity.h"
 #include "EtchASketchActivity.h"
 #include "HttpClientActivity.h"
+#include "WledControlActivity.h"
 #include "GameOfLifeActivity.h"
 #include "HostScannerActivity.h"
 #include "MappedInputManager.h"
@@ -103,7 +104,7 @@ static constexpr RadarNode kRadarNodes[8] = {
   {"RECON",    14},
   {"OFFENSE",  21},
   {"DEFENSE",  12},
-  {"COMMS",     5},
+  {"COMMS",     6},
   {"TOOLS",    32},
   {"GAMES",    11},
   {"MAIN MENU", 0},
@@ -420,6 +421,7 @@ void AppsMenuActivity::loop() {
               {"Contact Exchange", "Swap contact cards via BLE", UIIcon::Transfer, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BleContactExchangeActivity>(r, m); }},
               {"Dead Drop", "Anonymous file exchange AP", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<DeadDropActivity>(r, m); }},
               {"Bulletin Board", "Local anonymous message board", UIIcon::Hotspot, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<BulletinBoardActivity>(r, m); }},
+              {"WLED Control", "Control addressable LED strips", UIIcon::Settings, [](GfxRenderer& r, MappedInputManager& m) { return std::make_unique<WledControlActivity>(r, m); }},
           };
           app = std::make_unique<AppCategoryActivity>(renderer, mappedInput, "Communications", std::move(e), false, 3);
           break;
@@ -680,7 +682,7 @@ void AppsMenuActivity::drawTile(int index, int x, int y, int w, int h, bool sele
     case 0: name = "Recon";    subtitle = "Scan & monitor";     appCount = 14; break;
     case 1: name = "Offense";  subtitle = "Scan/profile/test";  appCount = 21; break;
     case 2: name = "Defense";  subtitle = "Ghost & protect";    appCount = 12; break;
-    case 3: name = "Comms";    subtitle = "Chat & share";       appCount = 5;  break;
+    case 3: name = "Comms";    subtitle = "Chat, Share & Control";       appCount = 6;  break;
     case 4: name = "Tools";    subtitle = "Utilities";          appCount = 32; break;
     case 5: name = "Entertainment";    subtitle = "Games and More";      appCount = 11; break;
     case 6: name = "CrossPoint"; subtitle = "Main Menu";   appCount = 0;  break;
