@@ -39,6 +39,8 @@ class WledControlActivity final : public Activity {
     uint16_t effect = 0;
     std::string colourName = "Black";
     unsigned long lastUpdate = 0;
+    // Preset ID → name mapping fetched from the device. Populated on demand.
+    std::vector<std::pair<int, std::string>> presets;
   };
 
   State state = MENU;
@@ -46,6 +48,8 @@ class WledControlActivity final : public Activity {
   int selectedDeviceIndex = -1;
   int controlIndex = 0;  // 0=power, 1=brightness, 2=effect, 3=color
   int colorPresetIndex = 0; // Index of selected colour preset when controlling colour
+  // Index into the device.presets vector when selecting a stored preset.
+  int presetIndex = 0;
   // Transient status message shown after a command is sent (e.g., "Power ON")
   std::string commandMessage;
   unsigned long commandMessageTime = 0;
@@ -80,6 +84,10 @@ class WledControlActivity final : public Activity {
   // Set RGB colour of the device. Values are 0‑255.
   bool setDeviceColor(int deviceIndex, uint8_t r, uint8_t g, uint8_t b);
   void showError(const std::string& msg);
+  // Activate a stored preset on the device ("ps" command).
+  bool activatePreset(int deviceIndex, int presetId);
+  // Retrieve preset list from the device and store in devices[deviceIndex].presets
+  bool fetchPresets(int deviceIndex);
   int getMenuItemCount() const { return MENU_ITEM_COUNT; }
   BrightnessLevel getBrightnessLevel(uint8_t value) const;
 };

@@ -13,6 +13,7 @@
 #include "activities/util/KeyboardEntryActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
+#include <utility>
 
 // ---- Device I/O ----
 
@@ -161,6 +162,11 @@ static constexpr ColourPreset COLOUR_PRESETS[] = {
     {"Magenta",255,   0, 255},
     {"Black",     0,   0,   0}
 };
+
+// The earlier duplicate implementation of `fetchPresets` (lines 172‑224) has been
+// removed to resolve the redefinition error. The later implementation starting
+// at line 445 provides the same functionality with clearer parsing logic and
+// is retained.
 
 bool WledControlActivity::setDeviceColor(int deviceIndex, uint8_t r, uint8_t g, uint8_t b) {
   if (deviceIndex < 0 || deviceIndex >= (int)devices.size()) return false;
@@ -333,6 +339,109 @@ bool WledControlActivity::setDeviceEffect(int deviceIndex, uint16_t effect) {
   pollDeviceStatus(deviceIndex);
   requestUpdate();
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Activate a stored preset on the device. The WLED API expects a JSON payload
+// of the form {"ps":<presetId>}. This mirrors the colour‑setting helpers.
+// ---------------------------------------------------------------------------
+bool WledControlActivity::activatePreset(int deviceIndex, int presetId) {
+    if (deviceIndex < 0 || deviceIndex >= (int)devices.size()) return false;
+    if (WiFi.status() != WL_CONNECTED) {
+        showError("WiFi not connected");
+        return false;
+    }
+
+    WledDevice& dev = devices[deviceIndex];
+    std::string url = "http://" + dev.ipAddress + "/json";
+
+    char bodyBuf[64];
+    snprintf(bodyBuf, sizeof(bodyBuf), "{\"ps\":%d}", presetId);
+    std::string body(bodyBuf);
+
+    HTTPClient http;
+    http.setTimeout(HTTP_TIMEOUT_MS);
+    http.addHeader("Content-Type", "application/json");
+    if (!http.begin(url.c_str())) {
+        showError("HTTP init failed");
+        return false;
+    }
+
+    int httpCode = http.POST((uint8_t*)body.c_str(), body.length());
+    http.end();
+    if (httpCode != 200) {
+        showError("Preset activation failed");
+        return false;
+    }
+    // Optimistically update UI – the preset name will be reflected after a status poll.
+    commandMessage = "Activating preset...";
+    commandMessageTime = millis();
+    pollDeviceStatus(deviceIndex);
+    requestUpdate();
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// Fetch preset list from the selected WLED device.
+// The JSON returned by "/json/presets" is a simple map of ID to an object
+// containing a "n" field with the preset name. We perform a lightweight parse
+// without pulling in a full JSON library to keep RAM usage low.
+// ---------------------------------------------------------------------------
+bool WledControlActivity::fetchPresets(int deviceIndex) {
+    if (deviceIndex < 0 || deviceIndex >= (int)devices.size()) return false;
+    if (WiFi.status() != WL_CONNECTED) {
+        showError("WiFi not connected");
+        return false;
+    }
+
+    WledDevice& dev = devices[deviceIndex];
+    std::string url = "http://" + dev.ipAddress + "/json/presets";
+
+    HTTPClient http;
+    http.setTimeout(HTTP_TIMEOUT_MS);
+    if (!http.begin(url.c_str())) {
+        showError("HTTP init failed");
+        return false;
+    }
+
+    int httpCode = http.GET();
+    if (httpCode != 200) {
+        http.end();
+        showError("Failed to fetch presets");
+        return false;
+    }
+
+    String payload = http.getString();
+    http.end();
+
+    // Clear any existing presets for this device.
+    dev.presets.clear();
+
+    const char* data = payload.c_str();
+    const char* p = data;
+    while (p && *p) {
+        // Look for an ID string followed by a colon
+        const char* idStart = strchr(p, '"');
+        if (!idStart) break;
+        const char* idEnd = strchr(idStart + 1, '"');
+        if (!idEnd) break;
+        std::string idStr(idStart + 1, idEnd - idStart - 1);
+        // Move past the closing quote and any whitespace/colon
+        const char* afterId = strchr(idEnd, ':');
+        if (!afterId) break;
+        // Find the name field within this object
+        const char* nameKey = strstr(afterId, "\"n\"");
+        if (!nameKey) break;
+        const char* nameStart = strchr(nameKey + 3, '"');
+        if (!nameStart) break;
+        const char* nameEnd = strchr(nameStart + 1, '"');
+        if (!nameEnd) break;
+        std::string name(nameStart + 1, nameEnd - nameStart - 1);
+        int id = std::stoi(idStr);
+        dev.presets.emplace_back(id, name);
+        p = nameEnd + 1;
+    }
+    return true;
 }
 
 
@@ -527,21 +636,16 @@ void WledControlActivity::onExit() {
           requestUpdate();
         }
 
-       // Long press toggles power directly from the device list.
+        // Long press toggles power directly from the device list, preserving previous brightness.
         if (mappedInput.isPressed(MappedInputManager::Button::Confirm)) {
           if (!confirmHeld) {
             confirmHeld = true;
             confirmLongHandled = false;
           } else if (confirmHeld && !confirmLongHandled && mappedInput.getHeldTime() > LONG_PRESS_MS) {
-            // Long press toggles power directly from the list, always switching between OFF and 100% brightness.
             if (selectedDeviceIndex >= 0 && selectedDeviceIndex < (int)devices.size()) {
               bool newPower = !devices[selectedDeviceIndex].powerOn;
               setDevicePower(selectedDeviceIndex, newPower);
-              if (newPower) {
-                // When turning ON, set brightness to maximum (100%).
-                setDeviceBrightness(selectedDeviceIndex, 255);
-              }
-              // Refresh status for the list entry.
+              // Do not modify brightness; keep stored value.
               pollDeviceStatus(selectedDeviceIndex);
               requestUpdate();
             }
@@ -567,12 +671,22 @@ void WledControlActivity::onExit() {
         case CONTROLLING_DEVICE: {
           // Navigation between the four control items (highlight only)
           buttonNavigator.onNext([this] {
-            controlIndex = (controlIndex + 1) % 4;
+            // When the colour control is highlighted and the device provides presets,
+            // advance through the preset list instead of the generic colour index.
+            if (controlIndex == 3 && !devices[selectedDeviceIndex].presets.empty()) {
+              presetIndex = (presetIndex + 1) % devices[selectedDeviceIndex].presets.size();
+            } else {
+              controlIndex = (controlIndex + 1) % 4;
+            }
             requestUpdate();
           });
 
           buttonNavigator.onPrevious([this] {
-            controlIndex = (controlIndex == 0) ? 3 : controlIndex - 1;
+            if (controlIndex == 3 && !devices[selectedDeviceIndex].presets.empty()) {
+              presetIndex = (presetIndex == 0) ? (devices[selectedDeviceIndex].presets.size() - 1) : presetIndex - 1;
+            } else {
+              controlIndex = (controlIndex == 0) ? 3 : controlIndex - 1;
+            }
             requestUpdate();
           });
 
@@ -581,36 +695,50 @@ void WledControlActivity::onExit() {
             if (controlIndex == 0) {
               setDevicePower(selectedDeviceIndex, !devices[selectedDeviceIndex].powerOn);
             } else if (controlIndex == 1) {
-              uint8_t newBri = devices[selectedDeviceIndex].brightness;
-              if (newBri < 255) {
-                newBri = (newBri < 50) ? 50 : (newBri < 127) ? 127 : (newBri < 200) ? 200 : 255;
+                // Cycle through defined brightness levels (OFF, LOW, MEDIUM, HIGH, MAX)
+                static const uint8_t levels[] = {0, 50, 127, 200, 255};
+                uint8_t cur = devices[selectedDeviceIndex].brightness;
+                // Find current level index
+                size_t idx = 0;
+                for (size_t i = 0; i < sizeof(levels); ++i) {
+                    if (cur <= levels[i]) { idx = i; break; }
+                }
+                // Advance to next level, wrap around
+                size_t nextIdx = (idx + 1) % (sizeof(levels) / sizeof(levels[0]));
+                uint8_t newBri = levels[nextIdx];
                 setDeviceBrightness(selectedDeviceIndex, newBri);
-              }
             } else if (controlIndex == 2) {
-              uint16_t newEffect = devices[selectedDeviceIndex].effect + 1;
-              if (newEffect > 255) newEffect = 255;
-              setDeviceEffect(selectedDeviceIndex, newEffect);
+                uint16_t newEffect = devices[selectedDeviceIndex].effect + 1;
+                if (newEffect > 255) newEffect = 255;
+                setDeviceEffect(selectedDeviceIndex, newEffect);
             } else if (controlIndex == 3) {
-               // Long press will open colour picker; short press does nothing
+                // Short press cycles colour presets directly
+                size_t presetCount = sizeof(COLOUR_PRESETS) / sizeof(COLOUR_PRESETS[0]);
+                size_t nextIdx = (colorPresetIndex + 1) % presetCount;
+                const auto &cp = COLOUR_PRESETS[nextIdx];
+                setDeviceColor(selectedDeviceIndex, cp.r, cp.g, cp.b);
+                // Update UI index to reflect the new preset
+                colorPresetIndex = nextIdx;
             }
             requestUpdate();
           }
 
           // Detect long press on Confirm to open colour selection popup when colour is highlighted
-          if (mappedInput.isPressed(MappedInputManager::Button::Confirm)) {
-            if (!confirmHeld) {
-              confirmHeld = true;
-              confirmLongHandled = false;
-            } else if (confirmHeld && !confirmLongHandled && mappedInput.getHeldTime() > LONG_PRESS_MS && controlIndex == 3) {
-              // Transition to colour selection popup
-              state = COLOUR_SELECTION;
-              colorPresetIndex = 0;
-              // Reset hold flags to avoid re‑entering immediately on next loop
-              confirmHeld = false;
-              confirmLongHandled = true;
-              requestUpdate();
+            if (mappedInput.isPressed(MappedInputManager::Button::Confirm)) {
+              if (!confirmHeld) {
+                confirmHeld = true;
+                confirmLongHandled = false;
+              } else if (confirmHeld && !confirmLongHandled && mappedInput.getHeldTime() > LONG_PRESS_MS && controlIndex == 3) {
+                // Transition to preset selection popup. Fetch presets for the device.
+                state = COLOUR_SELECTION;
+                presetIndex = 0;
+                fetchPresets(selectedDeviceIndex);
+                // Reset hold flags to avoid re‑entering immediately on next loop
+                confirmHeld = false;
+                confirmLongHandled = true;
+                requestUpdate();
+              }
             }
-          }
 
           // Reset hold flags on release of Confirm (or when leaving this state)
           if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
@@ -632,26 +760,41 @@ void WledControlActivity::onExit() {
         // to CONTROLLING_DEVICE. Back cancels without changing the colour.
         // ---------------------------------------------------------------------
         case COLOUR_SELECTION: {
-          // Re‑use the buttonNavigator for cycling through presets
+          // Navigation cycles through the preset vector.
           buttonNavigator.onNext([this] {
-            colorPresetIndex = (colorPresetIndex + 1) % (sizeof(COLOUR_PRESETS) / sizeof(COLOUR_PRESETS[0]));
-            requestUpdate();
+            if (!devices.empty()) {
+              const auto& list = devices[selectedDeviceIndex].presets;
+              if (!list.empty()) {
+                presetIndex = (presetIndex + 1) % list.size();
+                requestUpdate();
+              }
+            }
           });
 
           buttonNavigator.onPrevious([this] {
-            colorPresetIndex = (colorPresetIndex == 0) ? (sizeof(COLOUR_PRESETS) / sizeof(COLOUR_PRESETS[0]) - 1) : colorPresetIndex - 1;
-            requestUpdate();
+            if (!devices.empty()) {
+              const auto& list = devices[selectedDeviceIndex].presets;
+              if (!list.empty()) {
+                presetIndex = (presetIndex == 0) ? (list.size() - 1) : presetIndex - 1;
+                requestUpdate();
+              }
+            }
           });
 
-          // Confirm applies the colour
+          // Confirm activates the selected preset.
           if (mappedInput.wasReleased(MappedInputManager::Button::Confirm)) {
-            const auto& cp = COLOUR_PRESETS[colorPresetIndex];
-            setDeviceColor(selectedDeviceIndex, cp.r, cp.g, cp.b);
+            if (!devices.empty()) {
+              const auto& list = devices[selectedDeviceIndex].presets;
+              if (!list.empty() && presetIndex < (int)list.size()) {
+                int presetId = list[presetIndex].first;
+                activatePreset(selectedDeviceIndex, presetId);
+              }
+            }
             state = CONTROLLING_DEVICE;
             requestUpdate();
           }
 
-          // Back cancels the popup
+          // Back cancels the popup.
           if (mappedInput.wasReleased(MappedInputManager::Button::Back)) {
             state = CONTROLLING_DEVICE;
             requestUpdate();
@@ -710,24 +853,29 @@ void WledControlActivity::render(RenderLock&&) {
    // Draw main title
    GUI.drawHeader(renderer, Rect{0, metrics.topPadding, pageWidth, metrics.headerHeight}, "WLED Control");
 
-   // ---- Wi‑Fi status as subtitle below the main title ----
-   const char* wifiStatus = (WiFi.status() == WL_CONNECTED) ? "On" : "Off";
-   char wifiBuf[64];
-   if (WiFi.status() == WL_CONNECTED) {
-     const char* ssid = WiFi.SSID().c_str();
-     snprintf(wifiBuf, sizeof(wifiBuf), "WiFi: %s | SSID:%s", wifiStatus, ssid);
-   } else {
-     snprintf(wifiBuf, sizeof(wifiBuf), "WiFi: %s | SSID: N/A", wifiStatus);
-   }
-   // Render subtitle centered horizontally just below the header.
-   int subtitleY = metrics.topPadding + metrics.headerHeight + 2;
-   int textWidth = strlen(wifiBuf) * 6; // approximate width for SMALL_FONT_ID
-   int subtitleX = (pageWidth - textWidth) / 2;
-   renderer.drawText(SMALL_FONT_ID, subtitleX, subtitleY, wifiBuf, true);
+     // ---- WiFi status in header, top left ----
+     char wifiStatus[64];
+     if (WiFi.status() == WL_CONNECTED) {
+       int32_t rssi = WiFi.RSSI();
+       int bars = 0;
+       if (rssi > -55) bars = 4;
+       else if (rssi > -65) bars = 3;
+       else if (rssi > -75) bars = 2;
+       else if (rssi > -85) bars = 1;
+       else bars = 0;
+       // Unicode block chars for bars (▁▂▃▄▅), or use ASCII fallback
+       const char* barStr[] = {"▁", "▂", "▃", "▄", "▅"};
+       snprintf(wifiStatus, sizeof(wifiStatus), "%s %s", barStr[bars], WiFi.SSID().c_str());
+     } else {
+       snprintf(wifiStatus, sizeof(wifiStatus), "off N/A");
+     }
+     // Top-left in header: 12px padding from left, vertically centered in header
+     int wifiX = 12;
+     int wifiY = metrics.topPadding + (metrics.headerHeight - 12) / 2;
+     renderer.drawText(SMALL_FONT_ID, wifiX, wifiY, wifiStatus, true);
 
-   // Start drawing the main content a few pixels below the header.
-    // Leave space for the subtitle (Wi‑Fi status) rendered just below the header.
-    int contentY = metrics.topPadding + metrics.headerHeight + 2 + 12; // subtitle height approx 12px + padding
+   // Start drawing the main content below the header (no subtitle)
+   int contentY = metrics.topPadding + metrics.headerHeight + 10;
 
       // Error message overlay
       if (!errorMessage.empty()) {
@@ -770,6 +918,22 @@ void WledControlActivity::render(RenderLock&&) {
 
     case VIEWING_DEVICES: {
       LOG_DBG("WLED", "rendering VIEWING_DEVICES, selectedDeviceIndex=%d", selectedDeviceIndex);
+      // Render status bar in the menu bar area for the selected device.
+      if (selectedDeviceIndex >= 0 && selectedDeviceIndex < (int)devices.size()) {
+        const auto& dev = devices[selectedDeviceIndex];
+        const char* briName = BRIGHTNESS_NAMES[(int)getBrightnessLevel(dev.brightness)];
+        char status[160];
+        if (dev.powerOn) {
+          snprintf(status, sizeof(status), "%s [ON %s %s]", dev.nickname.c_str(), briName, dev.colourName.c_str());
+        } else {
+          snprintf(status, sizeof(status), "%s [OFF]", dev.nickname.c_str());
+        }
+        // Position status in the top‑left of the menu bar (below the main title).
+        int statusY = metrics.topPadding + metrics.headerHeight + 2;
+        int statusX = 20; // left margin
+        renderer.drawText(SMALL_FONT_ID, statusX, statusY, status, true);
+      }
+
       renderer.drawText(UI_12_FONT_ID, 30, contentY, "Devices:", true);
       contentY += 35;
 
@@ -781,25 +945,11 @@ void WledControlActivity::render(RenderLock&&) {
          if (selected) {
            renderer.fillRect(20, y - 5, pageWidth - 40, 40, true);
          }
-
-         const char* briName = BRIGHTNESS_NAMES[(int)getBrightnessLevel(dev.brightness)];
-         // Show power, brightness level and colour name (if known).
-          char status[160];
-          if (dev.powerOn) {
-            // Show full info when on.
-            snprintf(status, sizeof(status), "%s [ON %s %s]",
-                     dev.nickname.c_str(),
-                     briName,
-                     dev.colourName.c_str());
-          } else {
-            // When off, only show OFF.
-            snprintf(status, sizeof(status), "%s [OFF]",
-                     dev.nickname.c_str());
-          }
-         renderer.drawText(UI_12_FONT_ID, 30, y, status, !selected);
+         // Show only nickname in the list.
+         renderer.drawText(UI_12_FONT_ID, 30, y, dev.nickname.c_str(), !selected);
        }
-      break;
-    }
+       break;
+     }
 
       case CONTROLLING_DEVICE: {
         LOG_DBG("WLED", "rendering CONTROLLING_DEVICE, selectedDeviceIndex=%d, controlIndex=%d", selectedDeviceIndex, controlIndex);
@@ -849,7 +999,7 @@ void WledControlActivity::render(RenderLock&&) {
           renderer.drawText(UI_12_FONT_ID, 30, colourY, colourStr, !colourSelected);
           contentY += 40;
 
-          renderer.drawText(SMALL_FONT_ID, 30, pageHeight - 50, "< Left/Right > | Back", true);
+          //renderer.drawText(SMALL_FONT_ID, 30, pageHeight - 50, "< Left/Right > | Back", true); // Hide Footer Navigation for now
         }
         break;
       }
